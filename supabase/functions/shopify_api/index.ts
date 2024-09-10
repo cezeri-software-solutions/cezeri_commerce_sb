@@ -1,46 +1,23 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
-// Setup type definitions for built-in Supabase Runtime APIs
-//////import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-//////
-//////console.log("Hello from Functions!")
-//////
-//////Deno.serve(async (req) => {
-//////  const { name } = await req.json()
-//////  const data = {
-//////    message: `Hello ${name}!`,
-//////  }
-//////
-//////  return new Response(
-//////    JSON.stringify(data),
-//////    { headers: { "Content-Type": "application/json" } },
-//////  )
-//////})
-
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/shopify_api' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*/
-
 //! supabase functions new shopify_api
 //! supabase functions deploy shopify_api
 
 import { corsHeaders } from "../_shared/cors.ts"; // Importiere die CORS-Header
 import {
+  deleteCollect,
+  deleteProductImage,
+  getCollectsOfProduct,
   getCustomCollectionsAll,
+  getCustomCollectionsByProductId,
+  getInventoryLevelByInventoryItemId,
+  getOrderFulfillmentsOfFulfillmentOrder,
   getProductRawById,
   getProductsAllRaw,
+  postCollect,
+  postFulfillment,
+  postInventoryItemAvailability,
+  postProductImage,
+  putProduct,
 } from "./helpers/shopifyAPI.ts";
-import { getShopifyCredentials } from "./helpers/shopifyCredentials.ts";
 
 console.log("Server startet...");
 
@@ -53,23 +30,31 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { marketplaceId, ownerId, functionName, productId } = await req
-      .json();
+    const {
+      credentials,
+      functionName,
+      productId,
+      inventoryItemId,
+      collectId,
+      imageId,
+      orderId,
+      postBody,
+    } = await req.json();
 
-    if (!marketplaceId || !ownerId || !functionName) {
-      return new Response("Missing parameters", {
-        status: 400,
-        headers: corsHeaders,
-      });
-    }
+    // if (!marketplaceId || !ownerId || !functionName) {
+    //   return new Response("Missing parameters", {
+    //     status: 400,
+    //     headers: corsHeaders,
+    //   });
+    // }
 
-    const credentials = await getShopifyCredentials(marketplaceId, ownerId);
-    if (!credentials) {
-      return new Response("Shopify credentials not found.", {
-        status: 404,
-        headers: corsHeaders,
-      });
-    }
+    // const credentials = await getShopifyCredentials(marketplaceId, ownerId);
+    // if (!credentials) {
+    //   return new Response("Shopify credentials not found.", {
+    //     status: 404,
+    //     headers: corsHeaders,
+    //   });
+    // }
 
     // Dynamischer Funktionsaufruf
     let response;
@@ -86,8 +71,138 @@ Deno.serve(async (req) => {
         }
         response = await getProductRawById(credentials, productId);
         break;
+      case "getInventoryLevelByInventoryItemId":
+        if (!inventoryItemId) {
+          return new Response("Missing inventoryItemId", {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+        response = await getInventoryLevelByInventoryItemId(
+          credentials,
+          inventoryItemId,
+        );
+        break;
+      case "getOrderFulfillmentsOfFulfillmentOrder":
+        if (orderId == null) {
+          return new Response("Missing orderId", {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+        response = await getOrderFulfillmentsOfFulfillmentOrder(
+          credentials,
+          orderId,
+        );
+        break;
       case "getCustomCollectionsAll":
         response = await getCustomCollectionsAll(credentials);
+        break;
+      case "getCollectsOfProduct":
+        if (!productId) {
+          return new Response("Missing productId", {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+        response = await getCollectsOfProduct(credentials, productId);
+        break;
+      case "getCustomCollectionsByProductId":
+        if (!productId) {
+          return new Response("Missing productId", {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+        response = await getCustomCollectionsByProductId(
+          credentials,
+          productId,
+        );
+        break;
+
+      case "postInventoryItemAvailability":
+        if (postBody == null) {
+          return new Response(
+            "Missing postBody",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await postInventoryItemAvailability(credentials, postBody);
+        break;
+      case "postProductImage":
+        if (productId == null || postBody == null) {
+          return new Response(
+            "Missing productId or postBody",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await postProductImage(credentials, productId, postBody);
+        break;
+      case "postCollect":
+        if (postBody == null) {
+          return new Response(
+            "Missing postBody",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await postCollect(credentials, postBody);
+        break;
+      case "postFulfillment":
+        if (postBody == null) {
+          return new Response(
+            "Missing postBody",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await postFulfillment(credentials, postBody);
+        break;
+      case "putProduct":
+        if (postBody == null || productId == null) {
+          return new Response(
+            "Missing postBody or productId",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await putProduct(credentials, productId, postBody);
+        break;
+      case "deleteCollect":
+        if (collectId == null) {
+          return new Response(
+            "Missing collectId",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await deleteCollect(credentials, collectId);
+        break;
+      case "deleteProductImage":
+        if (productId == null || imageId == null) {
+          return new Response(
+            "Missing productId or imageId",
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+        response = await deleteProductImage(credentials, productId, imageId);
         break;
       default:
         return new Response("Unknown function", {
